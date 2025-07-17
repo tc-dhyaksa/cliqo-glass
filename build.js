@@ -40,10 +40,8 @@ async function watch() {
             entryPoints: [point.in],
             outfile: `${point.out}.js`,
         })));
-        
-        console.log('Watching for changes...');
-        await Promise.all(contexts.map(context => context.watch()));
-
+        await Promise.all(contexts.map(ctx => ctx.watch()));
+        console.log('👀 Watching for changes...');
     } catch (e) {
         console.error('Watch mode failed:', e);
         process.exit(1);
@@ -54,4 +52,4 @@ if (process.argv.includes('--watch')) {
     watch();
 } else {
     build();
-} 
+}

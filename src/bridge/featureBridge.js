@@ -83,6 +83,48 @@ module.exports = {
     ipcMain.handle('ask:sendQuestionFromSummary', async (event, userPrompt) => await askService.sendMessage(userPrompt));
     ipcMain.handle('ask:toggleAskButton', async () => await askService.toggleAskButton());
     ipcMain.handle('ask:closeAskWindow',  async () => await askService.closeAskWindow());
+    ipcMain.handle('ask:transcribeWithWhisper', async (event, audioBuffer) => {
+        console.log('[IPC] ask:transcribeWithWhisper handler triggered');
+        // Retrieve OpenAI API key securely from modelStateService
+        const apiKeys = await modelStateService.getAllApiKeys();
+        const apiKey = apiKeys['openai'];
+        if (!apiKey) {
+            return '';
+        }
+        const fetch = require('node-fetch');
+        const FormData = require('form-data');
+        const formData = new FormData();
+        formData.append('file', Buffer.from(audioBuffer), {
+            filename: 'audio.webm',
+            contentType: 'audio/webm'
+        });
+        formData.append('model', 'whisper-1');
+        console.log('api key', apiKey);
+        try {
+            const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: formData
+            });
+            if (!response.ok) {
+                console.error('[IPC] Whisper transcription failed:', response.status, await response.text());
+                return '';
+            }
+            const data = await response.json();
+            const transcription = data.text || '';
+            console.log("transcription done, whisper response:", transcription);
+            if (transcription.trim()) {
+                // Send the transcription as a message
+                await askService.sendMessage(transcription);
+            }
+            return transcription;
+        } catch (error) {
+            console.error('[IPC] Whisper transcription error:', error);
+            return '';
+        }
+    });
     
     // Listen
     ipcMain.handle('listen:sendMicAudio', async (event, { data, mimeType }) => await listenService.handleSendMicAudioContent(data, mimeType));

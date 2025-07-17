@@ -1,5 +1,6 @@
 import { html, css, LitElement } from '../../ui/assets/lit-core-2.7.4.min.js';
 import { parser, parser_write, parser_end, default_renderer } from '../../ui/assets/smd.js';
+import whisperVoiceAskService from '../../features/ask/whisperVoiceAskService.js';
 
 export class AskView extends LitElement {
     static properties = {
@@ -313,14 +314,6 @@ export class AskView extends LitElement {
 
         .copy-button:hover {
             background: rgba(255, 255, 255, 0.15);
-        }
-
-        .copy-button svg {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
         }
 
         .copy-button .check-icon {
@@ -1274,13 +1267,37 @@ export class AskView extends LitElement {
         const text = (overridingText || textInput?.value || '').trim();
         // if (!text) return;
 
-        textInput.value = '';
-
         if (window.api) {
             window.api.askView.sendMessage(text).catch(error => {
                 console.error('Error sending text:', error);
             });
         }
+        if (textInput) {
+            textInput.value = '';
+        }
+    }
+
+    handleVoiceButtonClick() {
+        if (!this.isVoiceRecording) {
+            this.isVoiceRecording = true;
+            whisperVoiceAskService.setTranscriptionCallback(this.handleVoiceTranscription);
+            whisperVoiceAskService.startRecording();
+            this.requestUpdate();
+        } else {
+            this.isVoiceRecording = false;
+            whisperVoiceAskService.stopRecording();
+            this.requestUpdate();
+        }
+    }
+
+    handleVoiceTranscription(transcription) {
+        this.isVoiceRecording = false;
+        const textInput = this.shadowRoot?.getElementById('textInput');
+        if (textInput) {
+            textInput.value = transcription;
+        }
+        this.handleSendText(null, transcription);
+        this.requestUpdate();
     }
 
     handleTextKeydown(e) {
@@ -1389,6 +1406,20 @@ export class AskView extends LitElement {
                         @keydown=${this.handleTextKeydown}
                         @focus=${this.handleInputFocus}
                     />
+                    <button
+                        class="voice-btn"
+                        @click=${this.handleVoiceButtonClick}
+                        title="Ask with voice"
+                        style="background:${this.isVoiceRecording ? 'rgba(255,0,0,0.2)' : 'transparent'};color:${this.isVoiceRecording ? 'red' : 'white'}"
+                    >
+                        <span class="btn-label">${this.isVoiceRecording ? 'Stop' : 'Voice'}</span>
+                        <span class="btn-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10" />
+                                <rect x="9" y="9" width="6" height="6" rx="2"/>
+                            </svg>
+                        </span>
+                    </button>
                     <button
                         class="submit-btn"
                         @click=${this.handleSendText}

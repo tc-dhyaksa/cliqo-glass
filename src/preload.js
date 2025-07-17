@@ -153,6 +153,13 @@ contextBridge.exposeInMainWorld('api', {
     // Message Handling
     sendMessage: (text) => ipcRenderer.invoke('ask:sendQuestionFromAsk', text),
 
+    // Whisper Transcription
+    transcribeWithWhisper: async (audioBlob) => {
+      // Convert Blob to ArrayBuffer for IPC
+      const buffer = await audioBlob.arrayBuffer();
+      return await ipcRenderer.invoke('ask:transcribeWithWhisper', Buffer.from(buffer));
+    },
+
     // Listeners
     onAskStateUpdate: (callback) => ipcRenderer.on('ask:stateUpdate', callback),
     removeOnAskStateUpdate: (callback) => ipcRenderer.removeListener('ask:stateUpdate', callback),
