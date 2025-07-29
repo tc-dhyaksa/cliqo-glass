@@ -248,7 +248,7 @@ function createLLM({ apiKey, model = 'gpt-4.1', temperature = 0.7, maxTokens = 2
  * @returns {object} Streaming LLM instance
  */
 
-function prepResponseAPI(apiKey, usePortkey = false) {
+async function prepResponseAPI(apiKey, usePortkey = false, portkeyVirtualKey) {
   const fetchUrl = usePortkey 
     ? 'https://api.portkey.ai/v1/responses'
     : 'https://api.openai.com/v1/responses';
@@ -263,7 +263,7 @@ function prepResponseAPI(apiKey, usePortkey = false) {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       };
-  const response = fetch(fetchUrl, {
+  const response = await fetch(fetchUrl, {
     method: 'POST',
     headers: headers,
     body: JSON.stringify({
@@ -284,18 +284,20 @@ function prepResponseAPI(apiKey, usePortkey = false) {
   });
 
   if (!response.ok) {
-    const err = response.json();
-    throw new Error(`Responses API error ${response.statusText}: ${err.error.message}`);
+    const err = await response.json();
+    throw new Error(`Responses API error ${response.statusText}: ${err.error && err.error.message ? err.error.message : response.statusText}`);
   }
 
-  const data = response.json();
+  const data = await response.json();
   return { response_id: data.id };
 }
 
 function createStreamingLLM({ apiKey, model = 'gpt-4.1', temperature = 0.7, maxTokens = 2048, usePortkey = false, portkeyVirtualKey, ...config }) {
   return {
     streamChat: async (messages) => {
-      const prepResponseId = prepResponseAPI(apiKey, usePortkey).response_id;
+      console.log('prepResponse....');
+      const prepResponseId = await prepResponseAPI(apiKey, usePortkey, portkeyVirtualKey);
+      console.log('prepResponseId', prepResponseId.response_id);
 
       const fetchUrl = usePortkey 
         ? 'https://api.portkey.ai/v1/responses'
@@ -315,13 +317,22 @@ function createStreamingLLM({ apiKey, model = 'gpt-4.1', temperature = 0.7, maxT
       const response = await fetch(fetchUrl, {
         method: 'POST',
         headers:headers,
-        previous_response_id: prepResponseId,
         body: JSON.stringify({
           model: model,
-          messages,
-          temperature,
-          max_tokens: maxTokens,
+          input: messages,
+          temperature: temperature,
+          previous_response_id: prepResponseId.response_id,
+          max_output_tokens: maxTokens,
           stream: true,
+          tools: [
+            {
+              type: 'mcp',
+              server_label: 'amazon',
+              server_url: `https://server.smithery.ai/@SiliconValleyInsight/amazon-product-search/mcp?api_key=dffc64f2-6e1e-4fd4-b4f6-f2dd9684ef38&profile=xenogeneic-rooster-bmglEt`,
+              allowed_tools: ['find_products_to_buy', 'shop_for_items'],
+              require_approval: 'never',
+            },
+          ],
         }),
       });
 
@@ -339,4 +350,4 @@ module.exports = {
     createSTT,
     createLLM,
     createStreamingLLM
-}; 
+};

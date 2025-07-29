@@ -261,15 +261,15 @@ class AskService {
                 {
                     role: 'user',
                     content: [
-                        { type: 'text', text: `User Request: ${userPrompt.trim()}` },
+                        { type: 'input_text', text: `User Request: ${userPrompt.trim()}` },
                     ],
                 },
             ];
 
             if (screenshotBase64) {
                 messages[1].content.push({
-                    type: 'image_url',
-                    image_url: { url: `data:image/jpeg;base64,${screenshotBase64}` },
+                    type: 'input_image',
+                    image_url: `data:image/jpeg;base64,${screenshotBase64}`,
                 });
             }
             
@@ -284,6 +284,7 @@ class AskService {
 
             try {
                 const response = await streamingLLM.streamChat(messages);
+                console.log('done calling main streaming API, ', typeof response);
                 const askWin = getWindowPool()?.get('ask');
 
                 if (!askWin || askWin.isDestroyed()) {
@@ -307,15 +308,17 @@ class AskService {
                     console.log(`[AskService] Multimodal request failed, retrying with text-only: ${multimodalError.message}`);
                     
                     // 텍스트만으로 메시지 재구성
-                    const textOnlyMessages = [
-                        { role: 'system', content: systemPrompt },
-                        {
-                            role: 'user',
-                            content: `User Request: ${userPrompt.trim()}`
-                        }
-                    ];
+                    const textOnlyMessages = `User Request: ${userPrompt.trim()}`;
+                    // const textOnlyMessages = [
+                    //     { role: 'system', content: systemPrompt },
+                    //     {
+                    //         role: 'user',
+                    //         content: `User Request: ${userPrompt.trim()}`
+                    //     }
+                    // ];
 
                     const fallbackResponse = await streamingLLM.streamChat(textOnlyMessages);
+                    console.log('done calling streaming API, ', typeof fallbackResponse);
                     const askWin = getWindowPool()?.get('ask');
 
                     if (!askWin || askWin.isDestroyed()) {
@@ -375,29 +378,69 @@ class AskService {
             this.state.isLoading = false;
             this.state.isStreaming = true;
             this._broadcastState();
+            console.log("[start streaming response]");
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
 
-                const chunk = decoder.decode(value);
+                // Check if askWin is destroyed before processing
+                if (!askWin || askWin.isDestroyed()) {
+                    console.warn('[AskService] Ask window destroyed during streaming. Cancelling stream.');
+                    if (reader.cancel) await reader.cancel('Ask window destroyed');
+                    break;
+                }
+
+                const chunk = decoder.decode(value, { stream: true });
                 const lines = chunk.split('\n').filter(line => line.trim() !== '');
+                // console.log("[current full response]", fullResponse);
 
                 for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = line.substring(6);
-                        if (data === '[DONE]') {
-                            return; 
-                        }
-                        try {
-                            const json = JSON.parse(data);
-                            const token = json.choices[0]?.delta?.content || '';
-                            if (token) {
-                                fullResponse += token;
+                    if (!line.startsWith('data: ')) continue;
+                    const data = line.substring(6).trim();
+                    // console.log("[processing response data]", typeof data, data);
+                    if (!data) continue;
+                    if (data === '[DONE]') {
+                        return;
+                    }
+                    try {
+                        const json = JSON.parse(data);
+                        // Handle OpenAI streaming events
+                        if (json.choices && Array.isArray(json.choices)) {
+                            // Standard delta event
+                            const delta = json.choices[0].delta;
+                            if (delta && typeof delta.content === 'string') {
+                                fullResponse += delta.content;
+                                // console.log("[current full response]", fullResponse);
+                                // Check again before UI update
+                                if (!askWin || askWin.isDestroyed()) {
+                                    console.warn('[AskService] Ask window destroyed during streaming (UI update). Cancelling stream.');
+                                    if (reader.cancel) await reader.cancel('Ask window destroyed');
+                                    break;
+                                }
                                 this.state.currentResponse = fullResponse;
                                 this._broadcastState();
                             }
-                        } catch (error) {
+                        } else if (json.type && json.type === 'response.output_text.delta') {
+                            // Newer OpenAI streaming event type
+                            const token = json.delta || '';
+                            // console.log("[current token]", token);
+                            if (token) {
+                                fullResponse += token;
+                                // console.log("[current full response]", fullResponse);
+                                if (!askWin || askWin.isDestroyed()) {
+                                    console.warn('[AskService] Ask window destroyed during streaming (UI update). Cancelling stream.');
+                                    if (reader.cancel) await reader.cancel('Ask window destroyed');
+                                    break;
+                                }
+                                this.state.currentResponse = fullResponse;
+                                this._broadcastState();
+                            }
+                        } else if (json.type && json.type === 'response.completed') {
+                            // End of stream event
+                            return;
                         }
+                    } catch (error) {
+                        // Ignore parse errors for non-JSON lines
                     }
                 }
             }
