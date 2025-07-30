@@ -4,7 +4,7 @@
 appId: com.pickle.glass
 
 # The user-facing application name
-productName: Glass
+productName: Cliqo-AI
 
 # Publish configuration for GitHub releases
 publish:
