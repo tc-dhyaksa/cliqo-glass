@@ -1,7 +1,7 @@
 # electron-builder.yml
 
 # The unique application ID
-appId: com.pickle.glass
+appId: com.cliqo.cliqoapp
 
 # The user-facing application name
 productName: Cliqo-AI
@@ -65,16 +65,21 @@ nsis:
 # macOS specific configuration
 mac:
     # The application category type
-    category: public.app-category.utilities
+    category: public.app-category.productivity
     # Path to the .icns icon file
+    signIgnore: 
+      - ".*\\/locale\\.pak$"
     icon: src/ui/assets/logo.icns
     # Minimum macOS version (supports both Intel and Apple Silicon)
     minimumSystemVersion: '11.0'
     hardenedRuntime: true
     entitlements: entitlements.plist
     entitlementsInherit: entitlements.plist
+    gatekeeperAssess: false
     target:
       - target: dmg
         arch: universal
       - target: zip
         arch: universal
+
+# afterSign: ./scripts/notarize.js

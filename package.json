@@ -1,6 +1,6 @@
 {
-    "name": "pickle-glass",
-    "productName": "Glass",
+    "name": "CliqoAI",
+    "productName": "Cliqo-AI",
     "version": "0.2.4",
     "description": "Cl*ely for Free",
     "main": "src/index.js",
