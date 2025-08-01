@@ -223,7 +223,7 @@ class AskService {
             isStreaming: false,
             currentQuestion: userPrompt,
             currentResponse: '',
-            showTextInput: false,
+            showTextInput: true,
         };
         this._broadcastState();
 
