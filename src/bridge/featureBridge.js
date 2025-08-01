@@ -98,7 +98,7 @@ module.exports = {
             filename: 'audio.webm',
             contentType: 'audio/webm'
         });
-        formData.append('model', 'whisper-1');
+        formData.append('model', 'gpt-4o-mini-transcribe');
         console.log('api key', apiKey);
         try {
             const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
